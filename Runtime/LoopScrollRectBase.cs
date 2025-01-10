@@ -16,7 +16,8 @@ namespace UnityEngine.UI
     /// <remarks>
     /// LoopScrollRect will not do any clipping on its own. Combined with a Mask component, it can be turned into a loop scroll view.
     /// </remarks>
-    public abstract class LoopScrollRectBase : UIBehaviour, IInitializePotentialDragHandler, IBeginDragHandler, IEndDragHandler, IDragHandler, IScrollHandler, ICanvasElement, ILayoutElement, ILayoutGroup
+    public abstract class 
+        LoopScrollRectBase : UIBehaviour, IInitializePotentialDragHandler, IBeginDragHandler, IEndDragHandler, IDragHandler, IScrollHandler, ICanvasElement, ILayoutElement, ILayoutGroup, IItemPresentScroll
     {
         //==========LoopScrollRect==========
         /// <summary>
@@ -81,7 +82,7 @@ namespace UnityEngine.UI
         protected float m_ContentTopPadding = 0;
         protected float m_ContentBottomPadding = 0;
         protected GridLayoutGroup m_GridLayout = null;
-        protected float contentSpacing
+        public float ContentSpacing
         {
             get
             {
@@ -646,7 +647,7 @@ namespace UnityEngine.UI
         private float m_HSliderHeight;
         private float m_VSliderWidth;
 
-        [System.NonSerialized] private RectTransform m_Rect;
+        protected RectTransform m_Rect { get; private set; }
         private RectTransform rectTransform
         {
             get
@@ -666,7 +667,7 @@ namespace UnityEngine.UI
         {}
 
         //==========LoopScrollRect==========
-        #if UNITY_EDITOR
+#if UNITY_EDITOR
         protected override void Awake()
         {
             base.Awake();
@@ -685,7 +686,7 @@ namespace UnityEngine.UI
                     Debug.Assert(!m_Vertical && m_Horizontal, this);
             }
         }
-        #endif
+#endif
 
         public void ClearCells()
         {
@@ -742,7 +743,56 @@ namespace UnityEngine.UI
             offset = -offset;
             return itemTypeEnd - idx - 1;
         }
-        
+
+        /// <summary>
+        /// 滑动到当前已生成的列表的最上（左）的位置
+        /// </summary>
+        public void ScrollToMin()
+        {
+            Vector3[] childCorners = new Vector3[4];
+            Vector3[] parentCorners = new Vector3[4];
+
+            content.GetWorldCorners(childCorners);
+            viewRect.GetWorldCorners(parentCorners);
+            float distance = 0;
+            float contentOffset = 0;
+            if (direction == LoopScrollRectDirection.Vertical)
+            {
+                // 子元素上边界 (World Y)
+                float childTop = childCorners[1].y; // 左上角
+                // 父级上边界 (World Y)
+                float parentTop = parentCorners[1].y; // 左上角
+
+                // 距离差距 (父级上边界 - 子元素上边界)
+                distance = parentTop - childTop;
+                if (distance < 0)
+                {
+                    contentOffset = -distance;
+                }
+            }
+            else
+            {
+                // 子元素左边界 (World x)
+                float childTop = childCorners[0].x; // 左下角
+                // 父级左边界 (World x)
+                float parentTop = parentCorners[0].x; // 左下角
+
+                // 距离差距 (父级左边界 - 子元素左边界)
+                distance = parentTop - childTop;
+                if (distance > 0)
+                {
+                    contentOffset = distance;
+                }
+            }
+
+            var pos = m_Content.anchoredPosition;
+            if (direction == LoopScrollRectDirection.Vertical)
+                pos.y = -contentOffset;
+            else
+                pos.x = contentOffset;
+            m_Content.anchoredPosition = pos;
+        }
+
         public void ScrollToCell(int index, float speed)
         {
             if (totalCount >= 0 && (index < 0 || index >= totalCount))
@@ -758,7 +808,23 @@ namespace UnityEngine.UI
             }
             StartCoroutine(ScrollToCellCoroutine(index, speed));
         }
-        
+
+        public void ScrollToCellCenter(int index, float speed)
+        {
+            if (totalCount >= 0 && (index < 0 || index >= totalCount))
+            {
+                Debug.LogErrorFormat("invalid index {0}", index);
+                return;
+            }
+            StopAllCoroutines();
+            if (speed <= 0)
+            {
+                RefillCells(index);
+                 return;
+            }
+            StartCoroutine(ScrollToCellCenterCoroutine(index, speed));
+        }
+
         public void ScrollToCellWithinTime(int index, float time)
         {
             if (totalCount >= 0 && (index < 0 || index >= totalCount))
@@ -787,13 +853,13 @@ namespace UnityEngine.UI
             {
                 if (sizeHelper != null)
                 {
-                    dist = GetDimension(sizeHelper.GetItemsSize(currentFirst) - sizeHelper.GetItemsSize(index)) + contentSpacing * (CurrentLine - TargetLine - 1);
+                    dist = GetDimension(sizeHelper.GetItemsSize(currentFirst) - sizeHelper.GetItemsSize(index)) + ContentSpacing * (CurrentLine - TargetLine - 1);
                     dist += offset;
                 }
                 else
                 {
-                    float elementSize = (GetAbsDimension(m_ContentBounds.size) - contentSpacing * (CurrentLines - 1)) / CurrentLines;
-                    dist = elementSize * (CurrentLine - TargetLine) + contentSpacing * (CurrentLine - TargetLine - 1);
+                    float elementSize = (GetAbsDimension(m_ContentBounds.size) - ContentSpacing * (CurrentLines - 1)) / CurrentLines;
+                    dist = elementSize * (CurrentLine - TargetLine) + ContentSpacing * (CurrentLine - TargetLine - 1);
                     dist -= offset;
                 }
             }
@@ -853,7 +919,7 @@ namespace UnityEngine.UI
                         }
 
                         float maxMove = Time.deltaTime * speed;
-                        if (Mathf.Abs(offset) < maxMove)
+                        if (Mathf.Abs(offset) < maxMove || speed <= 0)
                         {
                             needMoving = false;
                             move = offset;
@@ -861,12 +927,93 @@ namespace UnityEngine.UI
                         else
                             move = Mathf.Sign(offset) * maxMove;
                     }
-                    if (move != 0)
+                    if (!EquleZero(move))
                     {
                         Vector2 offset = GetVector(move);
                         m_Content.anchoredPosition += offset;
                         m_PrevPosition += offset;
                         m_ContentStartPosition += offset;
+                        UpdateBounds(true);
+                    }
+                }
+            }
+            StopMovement();
+            UpdatePrevData();
+        }
+
+        IEnumerator ScrollToCellCenterCoroutine(int index, float speed)
+        {
+            bool needMoving = true;
+            while (needMoving)
+            {
+                yield return null;
+                if (!m_Dragging)
+                {
+                    float move = 0;
+                    if (index < itemTypeStart)
+                    {
+                        move = -Time.deltaTime * speed;
+                    }
+                    else if (index >= itemTypeEnd)
+                    {
+                        move = Time.deltaTime * speed;
+                    }
+                    else
+                    {
+                        m_ViewBounds = new Bounds(viewRect.rect.center, viewRect.rect.size);
+                        var m_ItemBounds = GetBounds4Item(index);
+                        var offset = 0.0f;
+                        if (direction == LoopScrollRectDirection.Vertical)
+                            offset = m_ViewBounds.center.y - m_ItemBounds.center.y;
+                        else
+                            offset = m_ItemBounds.center.x - m_ViewBounds.center.x;
+                        // check if we cannot move on
+                        if (totalCount >= 0)
+                        {
+                            if (offset > 0 && itemTypeEnd == totalCount && !reverseDirection)
+                            {
+                                m_ItemBounds = GetBounds4Item(totalCount - 1);
+                                // reach bottom
+                                if ((direction == LoopScrollRectDirection.Vertical && m_ItemBounds.min.y > m_ViewBounds.min.y) ||
+                                    (direction == LoopScrollRectDirection.Horizontal && m_ItemBounds.max.x < m_ViewBounds.max.x))
+                                {
+                                    needMoving = false;
+                                    break;
+                                }
+                            }
+                            else if (offset < 0 && itemTypeStart == 0 && reverseDirection)
+                            {
+                                m_ItemBounds = GetBounds4Item(0);
+                                if ((direction == LoopScrollRectDirection.Vertical && m_ItemBounds.max.y < m_ViewBounds.max.y) ||
+                                    (direction == LoopScrollRectDirection.Horizontal && m_ItemBounds.min.x > m_ViewBounds.min.x))
+                                {
+                                    needMoving = false;
+                                    break;
+                                }
+                            }
+                        }
+
+                        float maxMove = Time.deltaTime * speed;
+                        if (Mathf.Abs(offset) < maxMove || speed < 0)
+                        {
+                            needMoving = false;
+                            move = offset;
+                        }
+                        else
+                            move = Mathf.Sign(offset) * maxMove;
+                    }
+                    Vector2 offsetVec = GetVector(move);
+                    offsetVec += CalculateOffset(offsetVec);
+                    if (direction == LoopScrollRectDirection.Vertical && EquleZero(offsetVec.y) ||
+                        direction == LoopScrollRectDirection.Horizontal && EquleZero(offsetVec.x))
+                    {
+                        needMoving = false;
+                    }
+                    else
+                    {
+                        m_Content.anchoredPosition += offsetVec;
+                        m_PrevPosition += offsetVec;
+                        m_ContentStartPosition += offsetVec;
                         UpdateBounds(true);
                     }
                 }
@@ -1022,6 +1169,9 @@ namespace UnityEngine.UI
                 first = false;
                 sizeFilled += size;
             }
+
+            m_ViewBounds = new Bounds(viewRect.rect.center, viewRect.rect.size);
+            m_ContentBounds = GetBounds();
 
             Vector2 pos = m_Content.anchoredPosition;
             if (direction == LoopScrollRectDirection.Vertical)
@@ -1484,9 +1634,10 @@ namespace UnityEngine.UI
             position += offset;
             if (m_MovementType == MovementType.Elastic)
             {
-                if (offset.x != 0)
+                
+                if (!EquleZero(offset.x))
                     position.x = position.x - RubberDelta(offset.x, m_ViewBounds.size.x);
-                if (offset.y != 0)
+                if (!EquleZero(offset.y))
                     position.y = position.y - RubberDelta(offset.y, m_ViewBounds.size.y);
             }
 
@@ -1527,7 +1678,7 @@ namespace UnityEngine.UI
                 for (int axis = 0; axis < 2; axis++)
                 {
                     // Apply spring physics if movement is elastic and content has an offset from the view.
-                    if (m_MovementType == MovementType.Elastic && offset[axis] != 0)
+                    if (m_MovementType == MovementType.Elastic && !EquleZero(offset[axis]))
                     {
                         float speed = m_Velocity[axis];
                         float smoothTime = m_Elasticity;
@@ -1571,9 +1722,9 @@ namespace UnityEngine.UI
             if (m_ViewBounds != m_PrevViewBounds || m_ContentBounds != m_PrevContentBounds || m_Content.anchoredPosition != m_PrevPosition)
             {
                 UpdateScrollbars(offset);
-                #if UNITY_2017_1_OR_NEWER
+#if UNITY_2017_1_OR_NEWER
                 UISystemProfilerApi.AddMarker("ScrollRect.value", this);
-                #endif
+#endif
                 m_OnValueChanged.Invoke(normalizedPosition);
                 UpdatePrevData();
             }
@@ -1599,29 +1750,29 @@ namespace UnityEngine.UI
         {
             if (sizeHelper != null)
             {
-                totalSize = sizeHelper.GetItemsSize(TotalLines).x + contentSpacing * (TotalLines - 1);
-                offset = m_ContentBounds.min.x - sizeHelper.GetItemsSize(StartLine).x - contentSpacing * StartLine;
+                totalSize = sizeHelper.GetItemsSize(TotalLines).x + ContentSpacing * (TotalLines - 1);
+                offset = m_ContentBounds.min.x - sizeHelper.GetItemsSize(StartLine).x - ContentSpacing * StartLine;
             }
             else
             {
-                float elementSize = (m_ContentBounds.size.x - contentSpacing * (CurrentLines - 1)) / CurrentLines;
-                totalSize = elementSize * TotalLines + contentSpacing * (TotalLines - 1);
-                offset = m_ContentBounds.min.x - elementSize * StartLine - contentSpacing * StartLine;
+                float elementSize = (m_ContentBounds.size.x - ContentSpacing * (CurrentLines - 1)) / CurrentLines;
+                totalSize = elementSize * TotalLines + ContentSpacing * (TotalLines - 1);
+                offset = m_ContentBounds.min.x - elementSize * StartLine - ContentSpacing * StartLine;
             }
         }
-        
+
         public void GetVerticalOffsetAndSize(out float totalSize, out float offset)
         {
             if (sizeHelper != null)
             {
-                totalSize = sizeHelper.GetItemsSize(TotalLines).y + contentSpacing * (TotalLines - 1);
-                offset = m_ContentBounds.max.y + sizeHelper.GetItemsSize(StartLine).y + contentSpacing * StartLine;
+                totalSize = sizeHelper.GetItemsSize(TotalLines).y + ContentSpacing * (TotalLines - 1);
+                offset = m_ContentBounds.max.y + sizeHelper.GetItemsSize(StartLine).y + ContentSpacing * StartLine;
             }
             else
             {
-                float elementSize = (m_ContentBounds.size.y - contentSpacing * (CurrentLines - 1)) / CurrentLines;
-                totalSize = elementSize * TotalLines + contentSpacing * (TotalLines - 1);
-                offset = m_ContentBounds.max.y + elementSize * StartLine + contentSpacing * StartLine;
+                float elementSize = (m_ContentBounds.size.y - ContentSpacing * (CurrentLines - 1)) / CurrentLines;
+                totalSize = elementSize * TotalLines + ContentSpacing * (TotalLines - 1);
+                offset = m_ContentBounds.max.y + elementSize * StartLine + ContentSpacing * StartLine;
             }
         }
         //==========LoopScrollRect==========
@@ -1958,7 +2109,7 @@ namespace UnityEngine.UI
             // If the vertical slider didn't kick in the first time, and the horizontal one did,
             // we need to check again if the vertical slider now needs to kick in.
             // If it doesn't fit vertically, enable vertical scrollbar and shrink view horizontally to make room for it.
-            if (m_VSliderExpand && vScrollingNeeded && viewRect.sizeDelta.x == 0 && viewRect.sizeDelta.y < 0)
+            if (m_VSliderExpand && vScrollingNeeded && EquleZero(viewRect.sizeDelta.x) && viewRect.sizeDelta.y < 0)
             {
                 viewRect.sizeDelta = new Vector2(-(m_VSliderWidth + m_VerticalScrollbarSpacing), viewRect.sizeDelta.y);
             }
@@ -2259,12 +2410,22 @@ namespace UnityEngine.UI
             LayoutRebuilder.MarkLayoutForRebuild(rectTransform);
         }
 
-        #if UNITY_EDITOR
+        protected bool HaveAni(string str)
+        {
+            return str != "Null" && !string.IsNullOrEmpty(str);
+        }
+        
+        private bool EquleZero(float value)
+        {
+            return Mathf.Abs(value - 0) <= 0.0001f;
+        }
+
+#if UNITY_EDITOR
         protected override void OnValidate()
         {
             SetDirtyCaching();
         }
 
-        #endif
+#endif
     }
 }

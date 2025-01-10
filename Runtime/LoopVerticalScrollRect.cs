@@ -15,7 +15,7 @@ namespace UnityEngine.UI
 
         protected override float GetSize(RectTransform item, bool includeSpacing)
         {
-            float size = includeSpacing ? contentSpacing : 0;
+            float size = includeSpacing ? ContentSpacing : 0;
             if (m_GridLayout != null)
             {
                 size += m_GridLayout.cellSize.y;
@@ -69,11 +69,11 @@ namespace UnityEngine.UI
                     maxItemTypeStart = Mathf.Max(0, totalCount - (itemTypeEnd - itemTypeStart));
                 }
                 float currentSize = contentBounds.size.y;
-                float elementSize = (currentSize - contentSpacing * (CurrentLines - 1)) / CurrentLines;
+                float elementSize = (currentSize - ContentSpacing * (CurrentLines - 1)) / CurrentLines;
                 ReturnToTempPool(true, itemTypeEnd - itemTypeStart);
                 itemTypeStart = itemTypeEnd;
 
-                int offsetCount = Mathf.FloorToInt((contentBounds.min.y - viewBounds.max.y) / (elementSize + contentSpacing));
+                int offsetCount = Mathf.FloorToInt((contentBounds.min.y - viewBounds.max.y) / (elementSize + ContentSpacing));
                 if (maxItemTypeStart >= 0 && itemTypeStart + offsetCount * contentConstraintCount > maxItemTypeStart)
                 {
                     offsetCount = Mathf.FloorToInt((float)(maxItemTypeStart - itemTypeStart) / contentConstraintCount);
@@ -85,7 +85,7 @@ namespace UnityEngine.UI
                 }
                 itemTypeEnd = itemTypeStart;
 
-                float offset = offsetCount * (elementSize + contentSpacing);
+                float offset = offsetCount * (elementSize + ContentSpacing);
                 m_Content.anchoredPosition -= new Vector2(0, offset + (reverseDirection ? 0 : currentSize));
                 contentBounds.center -= new Vector3(0, offset + currentSize / 2, 0);
                 contentBounds.size = Vector3.zero;
@@ -96,11 +96,11 @@ namespace UnityEngine.UI
             if ((viewBounds.min.y - contentBounds.max.y > viewBounds.size.y) && itemTypeEnd > itemTypeStart)
             {
                 float currentSize = contentBounds.size.y;
-                float elementSize = (currentSize - contentSpacing * (CurrentLines - 1)) / CurrentLines;
+                float elementSize = (currentSize - ContentSpacing * (CurrentLines - 1)) / CurrentLines;
                 ReturnToTempPool(false, itemTypeEnd - itemTypeStart);
                 itemTypeEnd = itemTypeStart;
 
-                int offsetCount = Mathf.FloorToInt((viewBounds.min.y - contentBounds.max.y) / (elementSize + contentSpacing));
+                int offsetCount = Mathf.FloorToInt((viewBounds.min.y - contentBounds.max.y) / (elementSize + ContentSpacing));
                 if (totalCount >= 0 && itemTypeStart - offsetCount * contentConstraintCount < 0)
                 {
                     offsetCount = Mathf.FloorToInt((float)(itemTypeStart) / contentConstraintCount);
@@ -112,7 +112,7 @@ namespace UnityEngine.UI
                 }
                 itemTypeEnd = itemTypeStart;
 
-                float offset = offsetCount * (elementSize + contentSpacing);
+                float offset = offsetCount * (elementSize + ContentSpacing);
                 m_Content.anchoredPosition += new Vector2(0, offset + (reverseDirection ? currentSize : 0));
                 contentBounds.center += new Vector3(0, offset + currentSize / 2, 0);
                 contentBounds.size = Vector3.zero;

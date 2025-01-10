@@ -1,4 +1,5 @@
-﻿using UnityEngine;
+﻿#if UNITY_EDITOR
+using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
@@ -130,7 +131,7 @@ namespace UnityEditor.UI
                 return canvas.gameObject;
 
             // No canvas in the scene at all? Then create a new one.
-            return SGMenuOptions.CreateNewUI();
+            return CreateNewUI();
         }
         #endregion
         
@@ -149,3 +150,4 @@ namespace UnityEditor.UI
         }
     }
 }
+#endif

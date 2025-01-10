@@ -72,5 +72,51 @@ namespace UnityEngine.UI
                 deletedItemTypeEnd = 0;
             }
         }
+
+        #region Itemindex
+
+        public int GetViewIndex(GameObject go)
+        {
+            for (int i = deletedItemTypeStart; i < m_Content.childCount - deletedItemTypeEnd; i++)
+            {
+                if (m_Content.GetChild(i) == go.transform)
+                {
+                    return i - deletedItemTypeStart;
+                }
+            }
+
+            return -1;
+        }
+
+        public int GetDataIndex(GameObject go)
+        {
+            int viewIndex = GetViewIndex(go);
+            return ViewIndexToDataIndex(viewIndex);
+        }
+
+        public int ViewIndexToDataIndex(int viewIndex)
+        {
+            if (viewIndex < 0)
+                return -1;
+            return viewIndex + itemTypeStart;
+        }
+
+        public int DataIndexToViewIndex(int dataIndex)
+        {
+            int viewIndex = dataIndex - itemTypeStart;
+            if (viewIndex < 0)
+                return -1;
+            return viewIndex;
+        }
+
+        #endregion
+
+        public GameObject GetItem(int dataIndex)
+        {
+            int viewIndex = DataIndexToViewIndex(dataIndex);
+            if (viewIndex < 0 || viewIndex >= m_Content.childCount)
+                return null;
+            return m_Content.GetChild(viewIndex).gameObject;
+        }
     }
 }
