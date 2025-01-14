@@ -7,17 +7,18 @@ using System.Collections.Generic;
 
 namespace UnityEngine.UI
 {
-    public abstract class LoopScrollRect : LoopScrollRectBase
+    public abstract class LoopScrollRect : LoopScrollRectBase, IItemEffect, IItemIndexInfo
     {
         [HideInInspector]
         [NonSerialized]
         public LoopScrollDataSource dataSource = null;
-        
+        public Action<int, GameObject> OnProvideItem { get; set; }
+
         protected override void ProvideData(Transform transform, int index)
         {
             dataSource.ProvideData(transform, index);
         }
-        
+
         protected override RectTransform GetFromTempPool(int itemIdx)
         {
             RectTransform nextItem = null;
@@ -39,6 +40,8 @@ namespace UnityEngine.UI
                 nextItem.transform.SetParent(m_Content, false);
                 nextItem.gameObject.SetActive(true);
             }
+
+            OnProvideItem?.Invoke(itemIdx, nextItem.gameObject);
             ProvideData(nextItem, itemIdx);
             return nextItem;
         }
@@ -60,8 +63,10 @@ namespace UnityEngine.UI
                 {
                     prefabSource.ReturnObject(m_Content.GetChild(i));
                 }
+
                 deletedItemTypeStart = 0;
             }
+
             if (deletedItemTypeEnd > 0)
             {
                 int t = m_Content.childCount - deletedItemTypeEnd;
@@ -69,6 +74,7 @@ namespace UnityEngine.UI
                 {
                     prefabSource.ReturnObject(m_Content.GetChild(i));
                 }
+
                 deletedItemTypeEnd = 0;
             }
         }

@@ -54,12 +54,12 @@ namespace UnityEngine.UI
         /// <summary>
         /// The first item id in LoopScroll.
         /// </summary>
-        protected int itemTypeStart = 0;
+        public int itemTypeStart { get; protected set; } = 0;
 
         /// <summary>
         /// The last item id in LoopScroll.
         /// </summary>
-        protected int itemTypeEnd = 0;
+        public int itemTypeEnd { get; protected set; } = 0;
 
         protected abstract float GetSize(RectTransform item, bool includeSpacing = true);
         protected abstract float GetDimension(Vector2 vector);
@@ -1210,13 +1210,11 @@ namespace UnityEngine.UI
             if (size > 0)
             {
                 m_HasRebuiltLayout = false;
-                if (!reverseDirection)
-                {
-                    Vector2 offset = GetVector(size);
-                    m_Content.anchoredPosition += offset;
-                    m_PrevPosition += offset;
-                    m_ContentStartPosition += offset;
-                }
+                Vector2 offset = GetVector(size);
+                offset = CountAddOffsetByPivot(offset);
+                m_Content.anchoredPosition -= offset;
+                m_PrevPosition -= offset;
+                m_ContentStartPosition -= offset;
             }
 
             return size;
@@ -1254,13 +1252,11 @@ namespace UnityEngine.UI
             if (size > 0)
             {
                 m_HasRebuiltLayout = false;
-                if (!reverseDirection)
-                {
-                    Vector2 offset = GetVector(size);
-                    m_Content.anchoredPosition -= offset;
-                    m_PrevPosition -= offset;
-                    m_ContentStartPosition -= offset;
-                }
+                Vector2 offset = GetVector(size);
+                offset = CountDeleteOffsetByPivot(offset);
+                m_Content.anchoredPosition += offset;
+                m_PrevPosition += offset;
+                m_ContentStartPosition += offset;
             }
 
             return size;
@@ -1293,13 +1289,11 @@ namespace UnityEngine.UI
             if (size > 0)
             {
                 m_HasRebuiltLayout = false;
-                if (reverseDirection)
-                {
-                    Vector2 offset = GetVector(size);
-                    m_Content.anchoredPosition -= offset;
-                    m_PrevPosition -= offset;
-                    m_ContentStartPosition -= offset;
-                }
+                Vector2 offset = GetVector(size);
+                offset = CountAddOffsetByPivot(offset);
+                m_Content.anchoredPosition += offset;
+                m_PrevPosition += offset;
+                m_ContentStartPosition += offset;
             }
 
             return size;
@@ -1335,16 +1329,36 @@ namespace UnityEngine.UI
             if (size > 0)
             {
                 m_HasRebuiltLayout = false;
-                if (reverseDirection)
-                {
-                    Vector2 offset = GetVector(size);
-                    m_Content.anchoredPosition += offset;
-                    m_PrevPosition += offset;
-                    m_ContentStartPosition += offset;
-                }
+                Vector2 offset = GetVector(size);
+                offset = CountDeleteOffsetByPivot(offset);
+                m_Content.anchoredPosition -= offset;
+                m_PrevPosition -= offset;
+                m_ContentStartPosition -= offset;
             }
 
             return size;
+        }
+        
+        /// <summary>
+        /// 根据pivot计算实际的偏移量
+        /// </summary>
+        /// <returns></returns>
+        protected Vector2 CountDeleteOffsetByPivot(Vector2 offset)
+        {
+            Vector2 privtOffset = m_Content.pivot - new Vector2(1, 0);
+            offset = new Vector2(privtOffset.x * offset.x, -privtOffset.y * offset.y);
+            return offset;
+        }
+        
+        /// <summary>
+        /// 根据pivot计算实际的偏移量
+        /// </summary>
+        /// <returns></returns>
+        protected Vector2 CountAddOffsetByPivot(Vector2 offset)
+        {
+            Vector2 privtOffset = m_Content.pivot - new Vector2(0, 1);
+            offset = new Vector2(privtOffset.x * offset.x, privtOffset.y * offset.y);
+            return offset;
         }
 
         protected int deletedItemTypeStart = 0;
